@@ -14,7 +14,7 @@ typedef struct Pair {
 
 //constants
 static unsigned int MARGIN_SIZE = 10;
-static int NUM_DILATIONS = 7;
+static int NUM_DILATIONS = 8;
 
 //image processing methods
 static void findSeamRange(Image *self, unsigned int rowNum, unsigned int *seamStart, unsigned int *seamEnd);
@@ -35,6 +35,7 @@ static int getSample(Image *self, double x, double y);
 static int skipWhitespace(char *str, size_t start);
 static int fitLineToPoints(Pair *points, size_t numPoints, double *mInvResult, double *bResult);
 static size_t removeXOutliers(Pair *points, size_t len);
+static void leftShift(char *data, unsigned int height, unsigned int numBytesPerRow);
 
 
 Image *createImage(char *pbmContents, size_t length){
@@ -271,34 +272,33 @@ void clearMargins(Image *self, unsigned int width){
 
 //dilate and image NUM_DILATION times - union of original, left shift, and up and down left diagonal shifts
 void dilate(Image *self){
-    Image temp;
-    
-    temp.width = self->width;
-    temp.height = self->height;
-    temp.numBytesPerRow = self->numBytesPerRow;
-    temp.data = malloc(sizeof(char) * self->numBytesPerRow * self->height);
-    memcpy(temp.data, self->data, self->numBytesPerRow * self->height);
+    char *centerPixels = malloc(sizeof(char) * self->numBytesPerRow * self->height);
+    char *upPixels = malloc(sizeof(char) * self->numBytesPerRow * self->height);
+    char *downPixels = malloc(sizeof(char) * self->numBytesPerRow * self->height);
+    size_t count, i;
 
-    //alternate idea from internet - shift existing image up and down and left and right and take union, may be faster
-    int count;
-    unsigned int j, i;
     for (count = 0; count < NUM_DILATIONS; count++){
-        for (j = 0; j < self->height; j++){
-            for (i = 0; i < self->width; i++){
-                if (get(self, i, j)){
-                    //set(&temp, i, j, 1);
-                    set(&temp, i - 1, j + 1, 1);
-                    set(&temp, i - 1, j, 1);
-                    set(&temp, i - 1, j - 1, 1);
-                    //set(&temp, i, j + 1, 1);
-                }
-            }
-        }
+        //create copy of image, copy shifted up, and copy shifted down - probably could streamline this
+        memcpy(centerPixels, self->data, self->numBytesPerRow * self->height);
+        memcpy(upPixels, self->data + self->numBytesPerRow, (self->numBytesPerRow - 1) * self->height);
+        memcpy(downPixels + self->numBytesPerRow, self->data, (self->numBytesPerRow - 1) * self->height);
 
-        memcpy(self->data, temp.data, self->numBytesPerRow * self->height);
+        //shift the copies left
+        leftShift(centerPixels, self->height, self->numBytesPerRow);
+        leftShift(upPixels, self->height, self->numBytesPerRow);
+        leftShift(downPixels, self->height, self->numBytesPerRow);
+
+        //propagate the changes to the original
+        for (i = 0; i < self->height * self->numBytesPerRow; i++){
+            self->data[i] |= centerPixels[i];
+            self->data[i] |= upPixels[i];
+            self->data[i] |= downPixels[i];
+        }
     }
 
-    free(temp.data);
+    free(centerPixels);
+    free(upPixels);
+    free(downPixels);
 }
 
 //determine the angle to rotate the image so that the margin is straight
@@ -597,3 +597,16 @@ size_t removeXOutliers(Pair *points, size_t len){
     return newLength;
 }
 
+//shift the given array of image data to the left one bit
+void leftShift(char *data, unsigned int height, unsigned int numBytesPerRow){
+    size_t i;
+    size_t length = height * numBytesPerRow;
+    unsigned char bit1 = 0;
+    unsigned char bit2;
+    for (i = 0; i < length; i++){
+        bit2 = ((data[length - i - 1] & (1 << 7))) >> 7;
+        data[length - i - 1] <<= 1;
+        data[length - i - 1] |= bit1;
+        bit1 = bit2;
+    }
+}
