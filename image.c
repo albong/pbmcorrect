@@ -491,7 +491,7 @@ Image *copy(Image *self){
 }
 
 //return 1 for succses, 0 for failure
-int save(Image *self, const char *filename){
+int savePBM(Image *self, const char *filename){
     int ret;
     FILE *fout;
    

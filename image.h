@@ -12,6 +12,6 @@ typedef struct Image {
 
 Image *createImage(char *pbmContents, size_t len);
 int correctImage(Image *self, Image **lResult, Image **rResult);
-int save(Image *self, const char *filename);
+int savePBM(Image *self, const char *filename);
 
 #endif
