@@ -35,7 +35,7 @@ static int getSample(Image *self, double x, double y);
 static int skipWhitespace(char *str, size_t start);
 static int fitLineToPoints(Pair *points, size_t numPoints, double *mInvResult, double *bResult);
 static size_t removeXOutliers(Pair *points, size_t len);
-static void leftShift(char *data, unsigned int height, unsigned int numBytesPerRow);
+static void shiftDataLeft(char *data, unsigned int height, unsigned int numBytesPerRow, int numShifts);
 
 
 Image *createImage(char *pbmContents, size_t length){
@@ -284,9 +284,9 @@ void dilate(Image *self){
         memcpy(downPixels + self->numBytesPerRow, self->data, (self->numBytesPerRow - 1) * self->height);
 
         //shift the copies left
-        leftShift(centerPixels, self->height, self->numBytesPerRow);
-        leftShift(upPixels, self->height, self->numBytesPerRow);
-        leftShift(downPixels, self->height, self->numBytesPerRow);
+        shiftDataLeft(centerPixels, self->height, self->numBytesPerRow, 1);
+        shiftDataLeft(upPixels, self->height, self->numBytesPerRow, 1);
+        shiftDataLeft(downPixels, self->height, self->numBytesPerRow, 1);
 
         //propagate the changes to the original
         for (i = 0; i < self->height * self->numBytesPerRow; i++){
@@ -469,18 +469,19 @@ Image *copyBox(Image *self, unsigned int x, unsigned int y, unsigned int width, 
         return NULL;
     }
 
+    //allocate and initialize the copy
     Image *result = malloc(sizeof(Image));
     result->width = width;
-    result->height = height;
+    result->height = self->height;
     result->numBytesPerRow = (width / 8) + (width % 8 != 0);
-    result->data = malloc(result->numBytesPerRow * height * sizeof(char));
-   
-    size_t i, j;
-    for (j = y; j < y + height; j++){
-        for (i = x; i < x + width; i++){
-            set(result, i - x, j - y, get(self, i, j));
-        }
+    result->data = malloc(result->numBytesPerRow * self->height * sizeof(char));
+
+    //copy the data
+    size_t j;
+    for (j = 0; j < self->height; j++){
+        memcpy(result->data + (j * result->numBytesPerRow), self->data + (j * self->numBytesPerRow) + (x / 8), result->numBytesPerRow);
     }
+    shiftDataLeft(result->data, result->height, result->numBytesPerRow, x % 8);
 
     return result;
 }
@@ -598,15 +599,17 @@ size_t removeXOutliers(Pair *points, size_t len){
 }
 
 //shift the given array of image data to the left one bit
-void leftShift(char *data, unsigned int height, unsigned int numBytesPerRow){
-    size_t i;
+void shiftDataLeft(char *data, unsigned int height, unsigned int numBytesPerRow, int numShifts){
+    size_t i, n;
     size_t length = height * numBytesPerRow;
-    unsigned char bit1 = 0;
-    unsigned char bit2;
-    for (i = 0; i < length; i++){
-        bit2 = ((data[length - i - 1] & (1 << 7))) >> 7;
-        data[length - i - 1] <<= 1;
-        data[length - i - 1] |= bit1;
-        bit1 = bit2;
+    unsigned char bit1, bit2;
+    for (n = 0; n < numShifts; n++){
+        bit1 = 0;
+        for (i = 0; i < length; i++){
+            bit2 = ((data[length - i - 1] & (1 << 7))) >> 7;
+            data[length - i - 1] <<= 1;
+            data[length - i - 1] |= bit1;
+            bit1 = bit2;
+        }
     }
 }
