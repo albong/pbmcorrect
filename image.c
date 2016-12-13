@@ -539,7 +539,14 @@ static int fitLineToPoints(Pair *points, size_t numPoints, double *mInvResult, d
     size_t i;
     double xAvg, yAvg;
     double sumNumerator, sumDenominator;
-    
+   
+    //safety first
+    if (numPoints < 2){
+        *mInvResult = 1;
+        *bResult = 0;
+        return;
+    }
+ 
     //compute averages
     xAvg = 0.0;
     yAvg = 0.0;
@@ -581,8 +588,10 @@ size_t removeXOutliers(Pair *points, size_t len){
     stdDev = sqrt(sumSquareDifferences / len);
 
     //copy over points within 1/4th a std dev
-    double lowerBound = mean - (stdDev / 4);
-    double upperBound = mean + (stdDev / 4);
+    //double lowerBound = mean - (stdDev / 4);
+    //double upperBound = mean + (stdDev / 4);
+    double lowerBound = mean - (stdDev);
+    double upperBound = mean + (stdDev);
     size_t newLength = 0;
     Pair *newPoints = malloc(sizeof(Pair) * len);
     for (i = 0; i < len; i++){
