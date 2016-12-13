@@ -18,7 +18,7 @@ int main(int argc, char **argv){
         printUsage();
         return 1;
     }
-    
+
     //read in from file
     size_t length;
     char *data = readFileToString(argv[1], &length);
